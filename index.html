@@ -292,13 +292,15 @@
   }
   .notif {
     background: var(--surface); border: 1px solid var(--accent);
-    border-radius: 12px; padding: 14px 18px; max-width: 320px;
-    box-shadow: 0 8px 24px rgba(0,0,0,.5);
+    border-radius: 16px; padding: 18px 20px; max-width: 340px;
+    box-shadow: 0 8px 32px rgba(232,201,122,.25), 0 2px 8px rgba(0,0,0,.6);
     animation: slideLeft .3s ease;
     pointer-events: all;
-    display: flex; align-items: flex-start; gap: 12px;
+    display: flex; align-items: flex-start; gap: 14px;
+    border-left: 4px solid var(--accent);
   }
   @keyframes slideLeft { from { transform: translateX(100%); opacity:0; } to { transform:none; opacity:1; } }
+  @keyframes flashFade { from { opacity:1; } to { opacity:0; } }
   .notif-icon { font-size: 1.2rem; flex-shrink: 0; }
   .notif-text strong { display: block; font-size: .9rem; margin-bottom: 2px; }
   .notif-text span { font-size: .8rem; color: var(--muted); }
@@ -865,8 +867,34 @@ function saveNote() {
 }
 
 // ── NOTIFICATIONS ─────────────────────────────────────────────────
-function showNotif(icon, title, body, duration = 4000) {
+function playNotifSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const times = [[0, 523], [0.15, 659], [0.3, 784]];
+    times.forEach(([when, freq]) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.4, ctx.currentTime + when);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + when + 0.3);
+      osc.start(ctx.currentTime + when);
+      osc.stop(ctx.currentTime + when + 0.4);
+    });
+  } catch(e) {}
+}
+
+function showNotif(icon, title, body, duration = 5000) {
+  playNotifSound();
   const container = document.getElementById('notif-container');
+
+  // Tam ekran flash efekti
+  const flash = document.createElement('div');
+  flash.style.cssText = 'position:fixed;inset:0;background:rgba(232,201,122,0.08);pointer-events:none;z-index:9999;animation:flashFade .6s ease forwards';
+  document.body.appendChild(flash);
+  setTimeout(() => flash.remove(), 700);
+
   const el = document.createElement('div');
   el.className = 'notif';
   el.innerHTML = `
@@ -877,7 +905,7 @@ function showNotif(icon, title, body, duration = 4000) {
     </div>
     <button class="notif-close" onclick="this.parentElement.remove()">✕</button>`;
   container.appendChild(el);
-  setTimeout(() => el.remove(), duration);
+  setTimeout(() => { el.style.animation = 'slideLeft .3s ease reverse'; setTimeout(() => el.remove(), 300); }, duration);
 }
 
 function scheduleNotification(ev) {
@@ -889,9 +917,9 @@ function scheduleNotification(ev) {
   const delay = notifTime - Date.now();
   if (delay > 0 && delay < 86400000 * 2) {
     setTimeout(() => {
-      showNotif('🔔', 'Hatırlatma!', ev.title, 8000);
+      showNotif('🔔', 'Hatırlatma!', ev.title, 10000);
       if ('Notification' in window && Notification.permission === 'granted') {
-        new Notification('Ajanda Hatırlatma', { body: ev.title });
+        new Notification('⏰ Ajanda Hatırlatma', { body: ev.title, icon: '📅', vibrate: [200, 100, 200] });
       }
     }, delay);
   }
@@ -917,7 +945,7 @@ function checkTodayReminders() {
     const evTime = new Date(); evTime.setHours(h, m, 0, 0);
     const diff = evTime - now;
     if (diff > 0 && diff < 60000) {
-      showNotif('⏰', 'Şimdi!', e.title, 10000);
+      showNotif('⏰', 'Tam Zamanı!', e.title, 12000);
     }
   });
 }
