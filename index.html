@@ -608,13 +608,16 @@ function renderSidebar() {
     return;
   }
   cont.innerHTML = events.map(e =>
-    `<div class="event-item type-${e.type}">
+    `<div class="event-item type-${e.type}" style="cursor:pointer" onclick="openModal('event-edit','${e.id}')">
       <div style="flex:1">
         <div class="event-time">${e.time}</div>
         <div class="event-title">${e.title}</div>
         ${e.note ? `<div style="font-size:.75rem;color:var(--muted);margin-top:3px">${e.note}</div>` : ''}
       </div>
-      <button class="event-del" onclick="deleteEvent('${e.id}')">✕</button>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <button class="event-del" onclick="event.stopPropagation();openModal('event-edit','${e.id}')" title="Düzenle">✏️</button>
+        <button class="event-del" onclick="event.stopPropagation();deleteEvent('${e.id}')" title="Sil">✕</button>
+      </div>
     </div>`
   ).join('');
 }
@@ -641,12 +644,13 @@ function renderTasks() {
       `<div class="task-item">
         <div class="priority-dot p-${t.priority}"></div>
         <input type="checkbox" class="task-check" ${t.done?'checked':''} onchange="toggleTask('${t.id}')">
-        <div style="flex:1">
+        <div style="flex:1;cursor:pointer" onclick="openModal('task-edit','${t.id}')">
           <div class="task-text ${t.done?'done':''}">${t.title}</div>
           ${t.due ? `<div class="task-meta">📅 ${fmtDate(t.due)}</div>` : ''}
-          ${t.note ? `<div class="task-meta">${t.note}</div>` : ''}
+          ${t.note ? `<div class="task-meta">📌 ${t.note}</div>` : ''}
         </div>
-        <button class="event-del" onclick="deleteTask('${t.id}')">✕</button>
+        <button class="event-del" onclick="openModal('task-edit','${t.id}')" title="Düzenle" style="margin-right:2px">✏️</button>
+        <button class="event-del" onclick="deleteTask('${t.id}')" title="Sil">✕</button>
       </div>`
     ).join('');
   };
@@ -695,74 +699,76 @@ function openModal(type, editId = null) {
   const overlay = document.getElementById('modal-overlay');
   overlay.classList.remove('hidden');
 
-  if (type === 'event') {
-    const selDate = dateKey(state.selectedDate);
-    document.getElementById('modal-title').textContent = 'Etkinlik Ekle';
+  if (type === 'event' || type === 'event-edit') {
+    const existing = editId ? state.events.find(e => e.id === editId) : null;
+    const selDate = existing ? existing.date : dateKey(state.selectedDate);
+    document.getElementById('modal-title').textContent = existing ? 'Etkinliği Düzenle' : 'Etkinlik Ekle';
     document.getElementById('modal-body').innerHTML = `
       <div class="form-group">
         <label>Başlık</label>
-        <input id="f-title" class="form-control" placeholder="Toplantı, doğum günü...">
+        <input id="f-title" class="form-control" placeholder="Toplantı, doğum günü..." value="${existing?.title||''}">
       </div>
       <div class="form-row">
         <div class="form-group">
           <label>Tarih</label>
-          <input id="f-date" type="date" class="form-control" value="${selDate}">
+          <input id="f-date" type="date" class="form-control" value="${existing?.date||selDate}">
         </div>
         <div class="form-group">
           <label>Saat</label>
-          <input id="f-time" type="time" class="form-control" value="09:00">
+          <input id="f-time" type="time" class="form-control" value="${existing?.time||'09:00'}">
         </div>
       </div>
       <div class="form-group">
         <label>Tür</label>
         <select id="f-type" class="form-control">
-          <option value="event">Randevu / Etkinlik</option>
-          <option value="reminder">Hatırlatma</option>
-          <option value="task">Görev</option>
+          <option value="event" ${existing?.type==='event'?'selected':''}>Randevu / Etkinlik</option>
+          <option value="reminder" ${existing?.type==='reminder'?'selected':''}>Hatırlatma</option>
+          <option value="task" ${existing?.type==='task'?'selected':''}>Görev</option>
         </select>
       </div>
       <div class="form-group">
         <label>Not (opsiyonel)</label>
-        <textarea id="f-note" class="form-control" placeholder="Açıklama..."></textarea>
+        <textarea id="f-note" class="form-control" placeholder="Açıklama...">${existing?.note||''}</textarea>
       </div>
       <div class="form-group">
         <label>Bildirim</label>
         <select id="f-reminder" class="form-control">
-          <option value="0">Bildirim yok</option>
-          <option value="5">5 dakika önce</option>
-          <option value="15">15 dakika önce</option>
-          <option value="30">30 dakika önce</option>
-          <option value="60">1 saat önce</option>
-          <option value="1440">1 gün önce</option>
+          <option value="0" ${!existing?.reminder?'selected':''}>Bildirim yok</option>
+          <option value="5" ${existing?.reminder==5?'selected':''}>5 dakika önce</option>
+          <option value="15" ${existing?.reminder==15?'selected':''}>15 dakika önce</option>
+          <option value="30" ${existing?.reminder==30?'selected':''}>30 dakika önce</option>
+          <option value="60" ${existing?.reminder==60?'selected':''}>1 saat önce</option>
+          <option value="1440" ${existing?.reminder==1440?'selected':''}>1 gün önce</option>
         </select>
       </div>`;
     document.getElementById('modal-save-btn').onclick = saveEvent;
   }
 
-  else if (type === 'task') {
-    document.getElementById('modal-title').textContent = 'Görev Ekle';
+  else if (type === 'task' || type === 'task-edit') {
+    const existing = editId ? state.tasks.find(t => t.id === editId) : null;
+    document.getElementById('modal-title').textContent = existing ? 'Görevi Düzenle' : 'Görev Ekle';
     document.getElementById('modal-body').innerHTML = `
       <div class="form-group">
         <label>Görev Adı</label>
-        <input id="f-title" class="form-control" placeholder="Yapılacak iş...">
+        <input id="f-title" class="form-control" placeholder="Yapılacak iş..." value="${existing?.title||''}">
       </div>
       <div class="form-row">
         <div class="form-group">
           <label>Son Tarih</label>
-          <input id="f-due" type="date" class="form-control">
+          <input id="f-due" type="date" class="form-control" value="${existing?.due||''}">
         </div>
         <div class="form-group">
           <label>Öncelik</label>
           <select id="f-priority" class="form-control">
-            <option value="high">🔴 Yüksek</option>
-            <option value="med" selected>🟡 Orta</option>
-            <option value="low">🟢 Düşük</option>
+            <option value="high" ${existing?.priority==='high'?'selected':''}>🔴 Yüksek</option>
+            <option value="med" ${!existing||existing?.priority==='med'?'selected':''}>🟡 Orta</option>
+            <option value="low" ${existing?.priority==='low'?'selected':''}>🟢 Düşük</option>
           </select>
         </div>
       </div>
       <div class="form-group">
         <label>Not</label>
-        <textarea id="f-note" class="form-control" placeholder="Açıklama..."></textarea>
+        <textarea id="f-note" class="form-control" placeholder="Açıklama...">${existing?.note||''}</textarea>
       </div>`;
     document.getElementById('modal-save-btn').onclick = saveTask;
   }
@@ -789,33 +795,60 @@ function closeModalOutside(e) { if (e.target === document.getElementById('modal-
 function saveEvent() {
   const title = document.getElementById('f-title').value.trim();
   if (!title) { alert('Başlık gerekli!'); return; }
-  const ev = {
-    id: uid(), title,
-    date: document.getElementById('f-date').value,
-    time: document.getElementById('f-time').value,
-    type: document.getElementById('f-type').value,
-    note: document.getElementById('f-note').value.trim(),
-    reminder: parseInt(document.getElementById('f-reminder').value),
-    created: new Date().toISOString()
-  };
-  state.events.push(ev);
-  save(); closeModal(); renderCalendar(); renderOverview();
-  scheduleNotification(ev);
-  showNotif('🗓️', 'Etkinlik Eklendi', ev.title);
+  if (currentEditId) {
+    const ev = state.events.find(e => e.id === currentEditId);
+    if (ev) {
+      ev.title    = title;
+      ev.date     = document.getElementById('f-date').value;
+      ev.time     = document.getElementById('f-time').value;
+      ev.type     = document.getElementById('f-type').value;
+      ev.note     = document.getElementById('f-note').value.trim();
+      ev.reminder = parseInt(document.getElementById('f-reminder').value);
+      scheduleNotification(ev);
+    }
+    save(); closeModal(); renderCalendar(); renderOverview();
+    showNotif('🗓️', 'Etkinlik Güncellendi', title);
+  } else {
+    const ev = {
+      id: uid(), title,
+      date: document.getElementById('f-date').value,
+      time: document.getElementById('f-time').value,
+      type: document.getElementById('f-type').value,
+      note: document.getElementById('f-note').value.trim(),
+      reminder: parseInt(document.getElementById('f-reminder').value),
+      created: new Date().toISOString()
+    };
+    state.events.push(ev);
+    save(); closeModal(); renderCalendar(); renderOverview();
+    scheduleNotification(ev);
+    showNotif('🗓️', 'Etkinlik Eklendi', ev.title);
+  }
 }
 
 function saveTask() {
   const title = document.getElementById('f-title').value.trim();
   if (!title) { alert('Görev adı gerekli!'); return; }
-  state.tasks.push({
-    id: uid(), title, done: false,
-    due: document.getElementById('f-due').value,
-    priority: document.getElementById('f-priority').value,
-    note: document.getElementById('f-note').value.trim(),
-    created: new Date().toISOString()
-  });
-  save(); closeModal(); renderTasks(); renderOverview();
-  showNotif('✅', 'Görev Eklendi', title);
+  if (currentEditId) {
+    const t = state.tasks.find(t => t.id === currentEditId);
+    if (t) {
+      t.title    = title;
+      t.due      = document.getElementById('f-due').value;
+      t.priority = document.getElementById('f-priority').value;
+      t.note     = document.getElementById('f-note').value.trim();
+    }
+    save(); closeModal(); renderTasks(); renderOverview();
+    showNotif('✅', 'Görev Güncellendi', title);
+  } else {
+    state.tasks.push({
+      id: uid(), title, done: false,
+      due: document.getElementById('f-due').value,
+      priority: document.getElementById('f-priority').value,
+      note: document.getElementById('f-note').value.trim(),
+      created: new Date().toISOString()
+    });
+    save(); closeModal(); renderTasks(); renderOverview();
+    showNotif('✅', 'Görev Eklendi', title);
+  }
 }
 
 function saveNote() {
